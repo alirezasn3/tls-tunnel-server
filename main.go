@@ -45,8 +45,6 @@ func loadConfigFile(config *ServerConfig) {
 }
 
 func loadCertificates(config *ServerConfig) {
-	log.Println(config.CertificateLocation)
-	log.Println(config.KeyLocation)
 	certificate, err := tls.LoadX509KeyPair(config.CertificateLocation, config.KeyLocation)
 	handleError(err, true)
 	config.TLSConfig.Certificates = []tls.Certificate{certificate}
