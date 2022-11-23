@@ -33,20 +33,21 @@ func handleError(err error, fatal bool) bool {
 }
 
 func logMessage(message string) {
-	log.Println("[info]" + message)
+	log.Println("[info] " + message)
 }
 
-func loadConfigFile(*ServerConfig) {
+func loadConfigFile(config *ServerConfig) {
 	bytes, err := os.ReadFile("config.json")
 	handleError(err, true)
-	var config ServerConfig
 	err = json.Unmarshal(bytes, &config)
 	handleError(err, true)
 	logMessage("config file loaded")
 }
 
 func loadCertificates(config *ServerConfig) {
-	certificate, err := tls.LoadX509KeyPair("certs/server.pem", "certs/server.key")
+	log.Println(config.CertificateLocation)
+	log.Println(config.KeyLocation)
+	certificate, err := tls.LoadX509KeyPair(config.CertificateLocation, config.KeyLocation)
 	handleError(err, true)
 	config.TLSConfig.Certificates = []tls.Certificate{certificate}
 	logMessage("certificates loaded")
