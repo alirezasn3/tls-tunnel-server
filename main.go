@@ -6,7 +6,6 @@ import (
 	"log"
 	"net"
 	"os"
-	"runtime/debug"
 	"sync"
 )
 
@@ -105,9 +104,6 @@ func handleRemoteClient(remoteConnection net.Conn, err error) {
 }
 
 func main() {
-	// disable GC
-	debug.SetGCPercent(-1)
-
 	// load server config and certificates
 	loadConfigFile(&config)
 	loadCertificates(&config)
