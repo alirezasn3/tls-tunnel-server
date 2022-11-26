@@ -52,8 +52,8 @@ func loadCertificates(config *ServerConfig) {
 }
 
 func handleRemoteClient(remoteConnection net.Conn, err error) {
-	defer logMessage("remote connection " + remoteConnection.RemoteAddr().String() + " closed")
-	defer remoteConnection.Close()
+
+	var wg sync.WaitGroup
 
 	// check if connection was successfull else exit go routine
 	if handleError(err, false) {
@@ -71,16 +71,9 @@ func handleRemoteClient(remoteConnection net.Conn, err error) {
 		defer localConnection.Close()
 		logMessage(remoteConnection.RemoteAddr().String() + " connected to " + config.Connect)
 
-		// create wait group for go routines
-		var wg sync.WaitGroup
-
 		// listen for incoming traffic from remote machine and forward it to local app
-		wg.Add(1)
 		go func() {
-			defer wg.Done()
-
 			buff := make([]byte, 1024*16)
-
 			for {
 				readBytes, _ := remoteConnection.Read(buff) // TODO: check for error
 				localConnection.Write(buff[:readBytes])     // TODO: check for error
@@ -88,58 +81,41 @@ func handleRemoteClient(remoteConnection net.Conn, err error) {
 		}()
 
 		// listen for incoming traffic from local app and forward it to remote machine
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-
-			buff := make([]byte, 1024*16)
-
-			for {
-				readBytes, _ := localConnection.Read(buff) // TODO: check for error
-				remoteConnection.Write(buff[:readBytes])   // TODO: check for error
-			}
-		}()
-
-		// wait for go routines to finish
-		wg.Wait()
+		buff := make([]byte, 1024*16)
+		for {
+			readBytes, _ := localConnection.Read(buff) // TODO: check for error
+			remoteConnection.Write(buff[:readBytes])   // TODO: check for error
+		}
 	} else {
-		// creat udp connection to local app
+		// create udp address objects from connect and listen addresses
 		listenAddress, err := net.ResolveUDPAddr("udp", ":0")
 		if handleError(err, false) {
 			return
 		}
+		connectAddress, err := net.ResolveUDPAddr("udp", config.Connect)
+		if handleError(err, false) {
+			return
+		}
+		// creat udp connection to local app
 		localUDPConnection, err := net.ListenUDP("udp", listenAddress)
 		if handleError(err, false) {
 			return
 		}
-		defer localUDPConnection.Close()
 		logMessage(remoteConnection.RemoteAddr().String() + " connected to " + localUDPConnection.LocalAddr().String() + " then to " + config.Connect)
-
-		// create wait group for go routines
-		var wg sync.WaitGroup
 
 		// listen for incoming traffic from remote machine and forward it to local app
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-
-			connectAddress, err := net.ResolveUDPAddr("udp", config.Connect)
-			if handleError(err, false) {
-				return
-			}
-
 			buff := make([]byte, 1024*16)
-
 			for {
 				readBytes, err := remoteConnection.Read(buff)
 				if handleError(err, false) {
+					remoteConnection.Close()
+					localUDPConnection.Close()
 					break
 				}
-				_, err = localUDPConnection.WriteToUDP(buff[:readBytes], connectAddress)
-				handleError(err, false)
-				// if !handleError(err, false) {
-				// logMessage(fmt.Sprintf("%s wrote %d bytes to %s", localUDPConnection.LocalAddr(), writenBytes, connectAddress))
-				// }
+				localUDPConnection.WriteToUDP(buff[:readBytes], connectAddress) // TODO: handle error
 			}
 		}()
 
@@ -147,24 +123,20 @@ func handleRemoteClient(remoteConnection net.Conn, err error) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-
 			buff := make([]byte, 1024*16)
-
 			for {
 				readBytes, _, err := localUDPConnection.ReadFromUDP(buff)
 				if handleError(err, false) {
+					remoteConnection.Close()
+					localUDPConnection.Close()
 					break
 				}
-				_, err = remoteConnection.Write(buff[:readBytes])
-				handleError(err, false)
-				// if !handleError(err, false) {
-				// 	logMessage(fmt.Sprintf("%s wrote %d bytes to %s", config.Connect, writenBytes, remoteConnection.RemoteAddr()))
-				// }
+				remoteConnection.Write(buff[:readBytes]) // TODO: handle error
 			}
 		}()
 
-		// wait for go routines to finish
 		wg.Wait()
+		logMessage("remote connection " + remoteConnection.RemoteAddr().String() + " closed")
 	}
 }
 
